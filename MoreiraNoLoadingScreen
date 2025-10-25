@@ -1,2 +1,1 @@
-loadstring(game:HttpGet("https://api.rubis.app/v2/scrap/hW2JYIfCTqYlt1cM/raw"))()
-local a = loadstring(game:HttpGet("https://raw.githubusercontent.com/PhatLee877/moreira/refs/heads/main/moreira"))()
+loadstring(game:HttpGet("https://pastefy.app/ez4Rcr8N/raw"))()
